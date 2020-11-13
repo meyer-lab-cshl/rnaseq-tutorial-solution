@@ -1,0 +1,10 @@
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - r-base =4.0.0
+  - r-tidyverse
+  - bioconductor-deseq2
+  - bioconductor-annotationhub
+  - bioconductor-apeglm

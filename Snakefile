@@ -34,6 +34,8 @@ rule generate_genome:
     output:
         "genome/STARINDEX/Genome"
     threads: 4
+    conda:
+        "envs/align.yaml"
     params:
         length=49,
     shell:
@@ -59,6 +61,8 @@ rule cutadapt:
     params:
         adapters="CTGACCTCAAGTCTGCACACGAGAAGGCTAG",
     threads: 1
+    conda:
+        "envs/trim.yaml"
     log:
         "logs/cutadapt/{sample}-{unit}.log"
     shell:
@@ -86,6 +90,8 @@ rule align:
     params:
         indexdir="genome/STARINDEX"
     threads: 4
+    conda:
+        "envs/align.yaml"
     shell:
         """
         STAR \
@@ -115,6 +121,8 @@ rule count_matrix:
         column=4
     log:
         "logs/counts/count_matrix.log"
+    conda:
+       "envs/pandas.yaml"
     script:
         "scripts/count-matrix.py"
 
@@ -134,7 +142,7 @@ rule deseq2:
         annotationhub=ORGANISM,
         design="~condition",
     conda:
-        "deseq2.yaml"
+        "envs/deseq2.yaml"
     log:
         "logs/deseq2/{contrast}.diffexp.log"
     script:
@@ -156,7 +164,7 @@ rule multiqc:
     log:
         "logs/multiqc.log"
     conda:
-        "../envs/multiqc.yaml"
+        "envs/multiqc.yaml"
     shell:
         """
         multiqc \
