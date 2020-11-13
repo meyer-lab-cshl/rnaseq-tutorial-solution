@@ -9,6 +9,10 @@ ORGANISM="human"
 samplesfile = "samples.txt"
 samples = pd.read_table(samplesfile).set_index(["sample", "unit"], drop=False)
 print(samples)
+
+##### setup report #####
+report: "report/workflow.rst"
+
 ##### target rule #####
 rule all:
     input:
