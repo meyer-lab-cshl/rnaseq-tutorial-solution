@@ -115,7 +115,6 @@ featureData <- tibble(gene_id=rownames(dds)) %>%
                             TRUE ~ symbol)) %>%
     select(symbol)
 mcols(dds) <- DataFrame(mcols(dds), featureData)
-saveRDS(dds, file=snakemake@output[["deseq"]])
 
 ## 2. Model fit ####
 # Generate named coefficients need for apeglm lfcShrink
@@ -162,7 +161,7 @@ combined <- deg_genes %>%
 write_csv(combined, snakemake@output[["table"]])
 
 ## b) Up/Down genes ####
-genes_up_down <- save_up_down(res=res)
+genes_up_down <- save_up_down(res=res, snakemake=snakemake)
 
 ## 4. Visualise results ####
 # ma plot
