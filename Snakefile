@@ -2,13 +2,13 @@ import pandas as pd
 
 ##### parameters #####
 SAMPLES = ['Id1_AA', 'Id2_AA', 'Id3_control', 'Id4_control']
-UNITS = ['rep1', 'rep2']
+UNITS = ['rep1', 'rep2', 'rep1', 'rep2']
 DESIGN="~ condition"
 ORGANISM="human"
 
 samplesfile = "samples.txt"
 samples = pd.read_table(samplesfile).set_index(["sample", "unit"], drop=False)
-print(samples)
+
 ##### target rule #####
 rule all:
     input:
@@ -17,13 +17,6 @@ rule all:
                contrast="AA_vs_control"),
         #"results/pca.svg",
         #"qc/multiqc_report.html"
-        "genome/STARINDEX/Genome",
-        expand("trimmed/{sample}-{unit}.1.fastq", zip,
-            sample=SAMPLES,
-            unit=UNITS),
-        expand("star/{sample}-{unit}/ReadsPerGene.out.tab", zip,
-            sample=SAMPLES,
-            unit=UNITS),
         "counts/all.tsv"
 
 ##### rules #####
@@ -114,9 +107,7 @@ rule count_matrix:
     output:
         "counts/all.tsv"
     params:
-        samples=expand("{sample}-{unit}",
-            sample=SAMPLES,
-            unit=UNITS),
+        samples=SAMPLES,
         strand="reverse",
         column=4
     log:
