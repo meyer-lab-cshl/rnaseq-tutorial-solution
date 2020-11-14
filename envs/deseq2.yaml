@@ -5,6 +5,9 @@ channels:
 dependencies:
   - r-base =4.0.0
   - r-tidyverse
+  - r-cowplot
+  - r-svglite
+  - bioconductor-rtracklayer
   - bioconductor-deseq2
   - bioconductor-annotationhub
   - bioconductor-apeglm
