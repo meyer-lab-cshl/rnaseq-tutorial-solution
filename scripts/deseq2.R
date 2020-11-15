@@ -5,10 +5,9 @@ sink(log, type="message")
 #################
 ## libraries ####
 #################
-library("tidyverse")
-library("AnnotationHub")
 library("DESeq2")
-library("ggplot2")
+library("biomaRt")
+library("tidyverse")
 library("cowplot")
 
 #################
@@ -93,20 +92,21 @@ dds <- DESeq(dds)
 rownames(dds) <- gsub("\\.\\d*", "", rownames(dds))
 
 # Annotate by gene names
-hub <- AnnotationHub()
-# query(hub,  c("GTF", "Ensembl", "Mus musculus")) "AH7799"
-# query(hub,  c("GTF", "Ensembl", "Homo sapiens")) "AH69461"
-if (snakemake@params[["annotationhub"]] == "mouse") {
-    hubid <- "AH7799"
-} else if(snakemake@params[["annotationhub"]] == "human") {
-    hubid <- "AH69461"
+if (snakemake@params[["organism"]] == "mouse") {
+    ensembl <- useMart("ensembl", dataset="mmusculus_gene_ensembl")
+} else if(snakemake@params[["organism"]] == "human") {
+    ensembl <- useMart("ensembl",dataset="hsapiens_gene_ensembl")
 } else {
-    stop("No annotation hub specified for organism:",
-         snakemake@params[["annotationhub"]])
+    stop("No annotation (biomart) specified for organism:",
+         snakemake@params[["organism"]])
 }
-anno <- hub[[hubid]]
-genemap <- tibble(gene_id=anno$gene_id,
-                  symbol=anno$gene_name) %>%
+
+genemap <- getBM(attributes=c('ensembl_gene_id', "external_gene_name"),
+       filters = 'ensembl_gene_id',
+       values = rownames(dds),
+       mart = ensembl) %>%
+    dplyr::rename(gene_id = ensembl_gene_id,
+           symbol = external_gene_name) %>%
     distinct()
 
 featureData <- tibble(gene_id=rownames(dds)) %>%
@@ -158,18 +158,14 @@ combined <- deg_genes %>%
     right_join(res_format, by="gene_id") %>%
     dplyr::select(gene_id, gene_name, everything())
 
-write_csv(combined, snakemake@output[["table"]])
+write_delim(combined, snakemake@output[["table"]], delim="\t")
 
 ## b) Up/Down genes ####
 genes_up_down <- save_up_down(res=res, snakemake=snakemake)
 
 ## 4. Visualise results ####
 # ma plot
-svg(snakemake@output[["ma_plot"]])
-plotMA(res, ylim=c(-2,2))
-dev.off()
-
-pdf(snakemake@output[["ma_pdf"]])
+pdf(snakemake@output[["ma_plot"]])
 plotMA(res, ylim=c(-2,2))
 dev.off()
 
@@ -188,5 +184,4 @@ p <- p + geom_point() +
     theme_cowplot() +
     theme(legend.position = "bottom",
           legend.justification = 0)
-ggsave(plot=p, height=4.5, width=7.5, filename = "results/pca.pdf")
-ggsave(plot=p, height=4.5, width=7.5, filename = "results/pca.svg")
+ggsave(plot=p, height=4.5, width=7.5, filename = snakemake@output[["pca_plot"]])
