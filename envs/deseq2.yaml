@@ -1,13 +1,11 @@
 channels:
-  - bioconda
-  - conda-forge
-  - defaults
+  - conda-forge/label/gcc7
+  - bioconda/label/gcc7
 dependencies:
-  - r-base =4.0.0
+  - r-base
   - r-tidyverse
   - r-cowplot
   - r-svglite
-  - bioconductor-rtracklayer
   - bioconductor-deseq2
-  - bioconductor-annotationhub
+  - bioconductor-biomart
   - bioconductor-apeglm
