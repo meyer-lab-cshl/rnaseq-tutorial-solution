@@ -32,15 +32,16 @@ rule generate_genome:
     conda:
         "envs/align.yaml"
     params:
-        length=49,
+        length=75,
     shell:
         """
-        STAR --runThreadN {threads} \
+        STAR \
             --runMode genomeGenerate \
-            --genomeDir genome/STARINDEX \
-            --genomeSAindexNbases 11 \
+            --runThreadN {threads} \
             --genomeFastaFiles {input.genome} \
             --sjdbGTFfile {input.gtf} \
+            --genomeDir genome/STARINDEX \
+            --genomeSAindexNbases 11 \
             --sjdbOverhang {params.length}
         """
 
@@ -91,15 +92,13 @@ rule align:
     shell:
         """
         STAR \
-            --runThreadN {threads} \
             --runMode alignReads \
-            --quantMode GeneCounts \
-            --sjdbGTFfile {input.gtf} \
+            --runThreadN {threads} \
             --genomeDir {params.indexdir} \
             --readFilesIn {input.fastq1} {input.fastq2} \
-            --outReadsUnmapped Fastq \
-            --outSAMtype BAM SortedByCoordinate \
-            --outFileNamePrefix star/{wildcards.sample}-{wildcards.unit}.
+            --outFileNamePrefix star/{wildcards.sample}-{wildcards.unit}. \
+            --quantMode GeneCounts \
+            --outSAMtype BAM SortedByCoordinate
         """
 
 rule index:
