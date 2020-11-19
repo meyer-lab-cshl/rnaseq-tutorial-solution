@@ -1,4 +1,15 @@
-##### rules #####
+#################################################
+# Skeleton of a rule
+#################################################
+rule generate_genome:
+    input:
+    output:
+    conda:
+    shell:
+
+#################################################
+# Walk through components of rule
+#################################################
 rule generate_genome:
     input:
         genome="genome/human.GRCh38.chr22.fasta",
@@ -20,6 +31,7 @@ rule generate_genome:
         """
 
 #################################################
+# rule to remove adaptor sequences: hard coded
 #################################################
 
 rule cutadapt:
@@ -46,6 +58,7 @@ rule cutadapt:
         """
 
 #################################################
+# move hardcoded parameters and threads
 #################################################
 
 ##### rules #####
@@ -87,7 +100,7 @@ rule cutadapt:
     conda:
         "envs/trim.yaml"
     log:
-        "logs/cutadapt/{sample}-{unit}.log"
+        "logs/cutadapt/Id1_AA-rep1.log"
     shell:
         """
         cutadapt \
@@ -100,6 +113,7 @@ rule cutadapt:
         """
 
 #################################################
+# use sample file to input information
 #################################################
 
 import pandas as pd
@@ -120,7 +134,7 @@ rule cutadapt:
     conda:
         "envs/trim.yaml"
     log:
-        "logs/cutadapt/{sample}-{unit}.log"
+        "logs/cutadapt/Id1_AA-rep1.log"
     shell:
         """
         cutadapt \
@@ -133,6 +147,7 @@ rule cutadapt:
         """
 
 #################################################
+# function as an input to rule
 #################################################
 
 def get_fastq(wildcards):
@@ -165,8 +180,16 @@ rule cutadapt:
 
 
 #################################################
+# introducing target rule
 #################################################
+rule all:
+    input:
+        expand("trimmed/{samples.sample}-{samples.unit}.1.fastq",
+            samples=samples.itertuples())
 
+#################################################
+# multi qc to visualise results of trim
+#################################################
 rule multiqc:
     input:
         expand("trimmed/{samples.sample}-{samples.unit}.qc.txt",
@@ -187,6 +210,39 @@ rule multiqc:
             trimmed > {log}
         """
 #################################################
+# Align; SAM as output; one file only; wildcards
+#################################################
+
+rule align:
+    input:
+        fastq1="trimmed/{sample}-{unit}.1.fastq",
+        fastq2="trimmed/{sample}-{unit}.2.fastq",
+        gtf="genome/human.GRCh38.chr22.gtf",
+        genome="genome/STARINDEX/Genome"
+    output:
+        "star/{sample}-{unit}.Aligned.out.sam",
+        "star/{sample}-{unit}.ReadsPerGene.out.tab"
+    log:
+        "logs/star/{sample}-{unit}.log"
+    params:
+        indexdir="genome/STARINDEX"
+    threads: 4
+    conda:
+        "envs/align.yaml"
+    shell:
+        """
+        STAR \
+            --runMode alignReads \
+            --runThreadN {threads} \
+            --genomeDir {params.indexdir} \
+            --readFilesIn {input.fastq1} {input.fastq2} \
+            --outFileNamePrefix star/{wildcards.sample}-{wildcards.unit}. \
+            --quantMode GeneCounts \
+            --outSAMtype SAM
+        """
+
+#################################################
+# Align reads with STAR, BAM as output
 #################################################
 
 rule align:
@@ -218,40 +274,30 @@ rule align:
         """
 
 #################################################
+# multi qc: include star output
 #################################################
-
-##### parameters #####
-DESIGN="~ condition"
-ORGANISM="human"
-
-rule align:
+rule multiqc:
     input:
-        fastq1="trimmed/{sample}-{unit}.1.fastq",
-        fastq2="trimmed/{sample}-{unit}.2.fastq",
-        gtf="genome/human.GRCh38.chr22.gtf",
-        genome="genome/STARINDEX/Genome"
+        expand("star/{samples.sample}-{samples.unit}.Aligned.sortedByCoord.out.bam",
+            samples=samples.itertuples())
     output:
-        "star/{sample}-{unit}.Aligned.sortedByCoord.out.bam",
-        "star/{sample}-{unit}.ReadsPerGene.out.tab"
+        "qc/multiqc_report.html"
     log:
-        "logs/star/{sample}-{unit}.log"
-    params:
-        indexdir="genome/STARINDEX"
-    threads: 4
+        "logs/multiqc.log"
     conda:
-        "envs/align.yaml"
+        "envs/multiqc.yaml"
     shell:
         """
-        STAR \
-            --runMode alignReads \
-            --runThreadN {threads} \
-            --genomeDir {params.indexdir} \
-            --readFilesIn {input.fastq1} {input.fastq2} \
-            --outFileNamePrefix star/{wildcards.sample}-{wildcards.unit}. \
-            --quantMode GeneCounts \
-            --outSAMtype BAM SortedByCoordinate
+        multiqc \
+            --force \
+            --export \
+            --outdir qc \
+            --filename multiqc_report.html \
+            trimmed star > {log}
         """
-
+#################################################
+# Helper rule for downstream commands: index bam
+#################################################
 rule index:
     input:
         "star/{sample}-{unit}.Aligned.sortedByCoord.out.bam",
@@ -262,7 +308,9 @@ rule index:
     shell:
         "samtools index {input}"
 
-
+#################################################
+# More QC: Gene body coverage
+#################################################
 rule rseqc_coverage:
     input:
         bed="genome/human.GRCh38.chr22.bed",
@@ -282,6 +330,32 @@ rule rseqc_coverage:
             -o qc/rseqc/{wildcards.sample}-{wildcards.unit} 2> {log}
         """
 
+#################################################
+# multi qc: include rseq output, dependency on bam
+#################################################
+rule multiqc:
+    input:
+        expand("qc/rseq/{samples.sample}-{samples.unit}.geneBodyCoverage.txt",
+            samples=samples.itertuples())
+    output:
+        "qc/multiqc_report.html"
+    log:
+        "logs/multiqc.log"
+    conda:
+        "envs/multiqc.yaml"
+    shell:
+        """
+        multiqc \
+            --force \
+            --export \
+            --outdir qc \
+            --filename multiqc_report.html \
+            trimmed star qc/rseq > {log}
+        """
+
+#################################################
+# More QC:  infer library
+#################################################
 
 rule rseqc_infer:
     input:
@@ -297,17 +371,43 @@ rule rseqc_infer:
         "infer_experiment.py -r {input.bed} -i {input.bam} > {output} 2> {log}"
 
 
+#################################################
+# multi qc: need include additional 'wait-file'
+#################################################
+rule multiqc:
+    input:
+        expand("qc/rseq/{samples.sample}-{samples.unit}.geneBodyCoverage.txt",
+            samples=samples.itertuples()),
+        expand("qc/rseq/{samples.sample}-{samples.unit}.infer_experiment.txt",
+            samples=samples.itertuples())
+    output:
+        "qc/multiqc_report.html"
+    log:
+        "logs/multiqc.log"
+    conda:
+        "envs/multiqc.yaml"
+    shell:
+        """
+        multiqc \
+            --force \
+            --export \
+            --outdir qc \
+            --filename multiqc_report.html \
+            trimmed star qc/rseq > {log}
+        """
+
+#################################################
+# Let's put the counts together; script directive
+#################################################
 rule count_matrix:
     input:
-        expand("star/{sample}-{unit}.ReadsPerGene.out.tab", zip,
-            sample=SAMPLES,
-            unit=UNITS)
+        expand("star/{samples.sample}-{samples.unit}.ReadsPerGene.out.tab",
+            samples=samples.itertuples())
     output:
         "counts/all.tsv"
     params:
-        samples=SAMPLES,
-        strand="reverse",
-        column=4
+        samples=samples['sample'].tolist(),
+        strand="reverse"
     log:
         "logs/counts/count_matrix.log"
     conda:
@@ -315,20 +415,129 @@ rule count_matrix:
     script:
         "scripts/count-matrix.py"
 
+#################################################
+# Parameters
+#################################################
+
+##### parameters #####
+STRAND = "reverse"
+
+rule count_matrix:
+    input:
+        expand("star/{samples.sample}-{samples.unit}.ReadsPerGene.out.tab",
+            samples=samples.itertuples())
+    output:
+        "counts/all.tsv"
+    params:
+        samples=samples['sample'].tolist(),
+        strand=STRAND
+    log:
+        "logs/counts/count_matrix.log"
+    conda:
+       "envs/pandas.yaml"
+    script:
+        "scripts/count-matrix.py"
+
+#################################################
+# set-up counts analysis
+#################################################
+rule setup_de:
+    input:
+        counts="counts/all.tsv"
+    output:
+        "deseq2/all.rds"
+    params:
+        species=SPECIES,
+        design=DESIGN,
+        samples=SAMPLESFILE
+    conda:
+        "envs/deseq2.yaml"
+    log:
+        "logs/deseq2/setyp.log"
+    script:
+        "scripts/setup_deseq2.R"
+
+#################################################
+# DESeq2
+#################################################
+
+##### parameters #####
+DESIGN="~ condition"
+SPECIES="human"
+SAMPLESFILE="samples.txt"
+
 rule deseq2:
     input:
-        counts="counts/all.tsv",
-        samples="samples.txt"
+        counts="deseq2/all.rds",
     output:
-        table=report("results/diffexp/{contrast}.diffexp.txt", "report/diffexp.rst"),
-        ma_plot=report("results/diffexp/{contrast}.ma-plot.pdf", "report/ma.rst"),
-        pca_plot=report("results/diffexp/{contrast}.pca-plot.pdf", "report/pca.rst"),
+        table="results/diffexp/{contrast}.diffexp.txt",
+        ma_plot="results/diffexp/{contrast}.ma-plot.pdf",
         up="results/diffexp/deg-sig-up_{contrast}.csv",
         down="results/diffexp/deg-sig-down_{contrast}.csv"
     params:
         contrast=['AA', 'control'],
-        organism=ORGANISM,
-        design="~condition",
+        design=DESIGN,
+        samples=SAMPLESFILE
+    conda:
+        "envs/deseq2.yaml"
+    log:
+        "logs/deseq2/{contrast}.diffexp.log"
+    script:
+        "scripts/deseq2.R"
+
+#################################################
+# config file
+#################################################
+
+##### load config and sample sheets #####
+configfile: "config.yaml"
+samples = pd.read_table(config["samples"]).set_index(["sample", "unit"], drop=False)
+
+rule all:
+    input:
+        expand(["results/diffexp/{contrast}.diffexp.txt",
+                "results/diffexp/{contrast}.ma-plot.pdf"],
+               contrast=config["diffexp"]["contrasts"]),
+        "qc/multiqc_report.html",
+
+rule deseq2:
+    input:
+        counts="counts/all.tsv"
+    output:
+        table="results/diffexp/{contrast}.diffexp.txt",
+        ma_plot="results/diffexp/{contrast}.ma-plot.pdf",
+        up="results/diffexp/deg-sig-up_{contrast}.csv",
+        down="results/diffexp/deg-sig-down_{contrast}.csv"
+    params:
+        contrast=config["diffexp"]["contrasts"],
+        design=config["diffexp"]["design"],
+        samples=config["samples"]
+    conda:
+        "envs/deseq2.yaml"
+    log:
+        "logs/deseq2/{contrast}.diffexp.log"
+    script:
+        "scripts/deseq2.R"
+
+
+#################################################
+# report
+#################################################
+##### setup report #####
+report: "report/workflow.rst"
+
+rule deseq2:
+    input:
+        counts="counts/all.tsv"
+    output:
+        table=report("results/diffexp/{contrast}.diffexp.txt", "report/diffexp.rst"),
+        ma_plot=report("results/diffexp/{contrast}.ma-plot.pdf", "report/ma.rst"),
+        up="results/diffexp/deg-sig-up_{contrast}.csv",
+        down="results/diffexp/deg-sig-down_{contrast}.csv"
+    params:
+        contrast=config["diffexp"]["contrasts"],
+        design=config["diffexp"]["design"],
+        samples=config["samples"]
     conda:
         "envs/deseq2.yaml"
     log:
