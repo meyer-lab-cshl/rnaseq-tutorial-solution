@@ -1,25 +1,29 @@
 import pandas as pd
 
-##### parameters #####
-SAMPLES = ['Id1_AA', 'Id2_AA', 'Id3_control', 'Id4_control']
-UNITS = ['rep1', 'rep2', 'rep1', 'rep2']
-DESIGN="~ condition"
-ORGANISM="human"
+##### functions #####
+def get_fastq(wildcards):
+    return samples.loc[(wildcards.sample, wildcards.unit), ["fq1", "fq2"]].dropna()
 
+# parameters
 samplesfile = "samples.txt"
-samples = pd.read_table(samplesfile).set_index(["sample", "unit"], drop=False)
+STRAND = "reverse"
+DESIGN="~ condition"
+SPECIES="human"
+SAMPLESFILE="samples.txt"
 
-##### target rule #####
-rule all:
-    input:
-        expand(["results/diffexp/{contrast}.diffexp.txt",
-                "results/diffexp/{contrast}.ma-plot.pdf"],
-               contrast="AA_vs_control"),
-        "qc/multiqc_report.html",
+##### load sample sheets #####
+samples = pd.read_table(SAMPLESFILE).set_index(["sample", "unit"], drop=False)
 
 ##### setup report #####
 report: "report/workflow.rst"
 
+##### target rule #####
+rule all:
+    input:
+        expand("results/diffexp/{contrast}.diffexp.txt",
+            contrast = "AA_vs_control"),
+        "results/diffexp/pca.pdf",
+        "qc/multiqc_report.html"
 
 ##### rules #####
 rule generate_genome:
@@ -28,11 +32,12 @@ rule generate_genome:
         gtf="genome/human.GRCh38.chr22.gtf"
     output:
         "genome/STARINDEX/Genome"
-    threads: 4
+    threads: 1
     conda:
         "envs/align.yaml"
     params:
         length=75,
+        Nbases=11
     shell:
         """
         STAR \
@@ -41,12 +46,9 @@ rule generate_genome:
             --genomeFastaFiles {input.genome} \
             --sjdbGTFfile {input.gtf} \
             --genomeDir genome/STARINDEX \
-            --genomeSAindexNbases 11 \
+            --genomeSAindexNbases {params.Nbases} \
             --sjdbOverhang {params.length}
         """
-
-def get_fastq(wildcards):
-    return samples.loc[(wildcards.sample, wildcards.unit), ["fq1", "fq2"]].dropna()
 
 rule cutadapt:
     input:
@@ -77,7 +79,6 @@ rule align:
     input:
         fastq1="trimmed/{sample}-{unit}.1.fastq",
         fastq2="trimmed/{sample}-{unit}.2.fastq",
-        gtf="genome/human.GRCh38.chr22.gtf",
         genome="genome/STARINDEX/Genome"
     output:
         "star/{sample}-{unit}.Aligned.sortedByCoord.out.bam",
@@ -111,6 +112,18 @@ rule index:
     shell:
         "samtools index {input}"
 
+rule rseqc_infer:
+    input:
+        bed="genome/human.GRCh38.chr22.bed",
+        bam="star/{sample}-{unit}.Aligned.sortedByCoord.out.bam",
+    output:
+        "qc/rseqc/{sample}-{unit}.infer_experiment.txt"
+    log:
+        "logs/rseqc/rseqc_infer/{sample}-{unit}.log"
+    conda:
+        "envs/rseqc.yaml"
+    shell:
+        "infer_experiment.py -r {input.bed} -i {input.bam} > {output} 2> {log}"
 
 rule rseqc_coverage:
     input:
@@ -131,71 +144,12 @@ rule rseqc_coverage:
             -o qc/rseqc/{wildcards.sample}-{wildcards.unit} 2> {log}
         """
 
-
-rule rseqc_infer:
-    input:
-        bed="genome/human.GRCh38.chr22.bed",
-        bam="star/{sample}-{unit}.Aligned.sortedByCoord.out.bam",
-    output:
-        "qc/rseqc/{sample}-{unit}.infer_experiment.txt"
-    log:
-        "logs/rseqc/rseqc_infer/{sample}-{unit}.log"
-    conda:
-        "envs/rseqc.yaml"
-    shell:
-        "infer_experiment.py -r {input.bed} -i {input.bam} > {output} 2> {log}"
-
-
-rule count_matrix:
-    input:
-        expand("star/{sample}-{unit}.ReadsPerGene.out.tab", zip,
-            sample=SAMPLES,
-            unit=UNITS)
-    output:
-        "counts/all.tsv"
-    params:
-        samples=SAMPLES,
-        strand="reverse",
-        column=4
-    log:
-        "logs/counts/count_matrix.log"
-    conda:
-       "envs/pandas.yaml"
-    script:
-        "scripts/count-matrix.py"
-
-rule deseq2:
-    input:
-        counts="counts/all.tsv",
-        samples="samples.txt"
-    output:
-        table=report("results/diffexp/{contrast}.diffexp.txt", "report/diffexp.rst"),
-        ma_plot=report("results/diffexp/{contrast}.ma-plot.pdf", "report/ma.rst"),
-        pca_plot=report("results/diffexp/{contrast}.pca-plot.pdf", "report/pca.rst"),
-        up="results/diffexp/deg-sig-up_{contrast}.csv",
-        down="results/diffexp/deg-sig-down_{contrast}.csv"
-    params:
-        contrast=['AA', 'control'],
-        organism=ORGANISM,
-        design="~condition",
-    conda:
-        "envs/deseq2.yaml"
-    log:
-        "logs/deseq2/{contrast}.diffexp.log"
-    script:
-        "scripts/deseq2.R"
-
 rule multiqc:
     input:
-        expand("star/{samples}-{units}.Aligned.sortedByCoord.out.bam", zip,
-            samples=SAMPLES,
-            units=UNITS),
-        expand("qc/rseqc/{samples}-{units}.infer_experiment.txt", zip,
-            samples=SAMPLES,
-            units=UNITS),
-        expand("qc/rseqc/{samples}-{units}.geneBodyCoverage.txt", zip,
-            samples=SAMPLES,
-            units=UNITS),
+        expand("qc/rseqc/{samples.sample}-{samples.unit}.geneBodyCoverage.txt",
+            samples=samples.itertuples()),
+        expand("qc/rseqc/{samples.sample}-{samples.unit}.infer_experiment.txt",
+            samples=samples.itertuples())
     output:
         "qc/multiqc_report.html"
     log:
@@ -211,3 +165,67 @@ rule multiqc:
             --filename multiqc_report.html \
             trimmed star qc/rseqc > {log}
         """
+
+rule count_matrix:
+    input:
+        expand("star/{samples.sample}-{samples.unit}.ReadsPerGene.out.tab",
+            samples=samples.itertuples())
+    output:
+        "counts/all.tsv"
+    params:
+        samples=samples['sample'].tolist(),
+        strand="reverse"
+    log:
+        "logs/counts/count_matrix.log"
+    conda:
+       "envs/pandas.yaml"
+    script:
+        "scripts/count-matrix.py"
+
+rule setup_de:
+    input:
+        counts="counts/all.tsv",
+        samples=SAMPLESFILE
+    output:
+        dds="deseq2/all.rds"
+    params:
+        species=SPECIES,
+        design=DESIGN
+    conda:
+        "envs/deseq2.yaml"
+    log:
+        "logs/deseq2/setup.log"
+    script:
+        "scripts/setup_deseq2.R"
+
+rule deseq2:
+    input:
+        dds="deseq2/all.rds",
+    output:
+        table=report("results/diffexp/{contrast}.diffexp.txt",
+            "report/diffexp.rst"),
+        ma_plot=report("results/diffexp/{contrast}.ma-plot.pdf",
+            "report/ma.rst"),
+        up="results/diffexp/deg-sig-up_{contrast}.csv",
+        down="results/diffexp/deg-sig-down_{contrast}.csv"
+    params:
+        design=DESIGN,
+        samples=SAMPLESFILE
+    conda:
+        "envs/deseq2.yaml"
+    log:
+        "logs/deseq2/{contrast}.diffexp.log"
+    script:
+        "scripts/deseq2.R"
+
+rule pca:
+    input:
+        dds="deseq2/all.rds"
+    output:
+        pca_plot=report("results/diffexp/pca.pdf", "report/pca.rst"),
+    conda:
+        "envs/deseq2.yaml"
+    log:
+        "logs/deseq2/pca.log"
+    script:
+        "scripts/pca.R"
