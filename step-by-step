@@ -441,11 +441,16 @@ rule count_matrix:
 #################################################
 # set-up counts analysis
 #################################################
+##### parameters #####
+DESIGN="~ condition"
+SPECIES="human"
+SAMPLESFILE="samples.txt"
+
 rule setup_de:
     input:
         counts="counts/all.tsv"
     output:
-        "deseq2/all.rds"
+        dds="deseq2/all.rds"
     params:
         species=SPECIES,
         design=DESIGN,
@@ -461,14 +466,11 @@ rule setup_de:
 # DESeq2
 #################################################
 
-##### parameters #####
-DESIGN="~ condition"
-SPECIES="human"
-SAMPLESFILE="samples.txt"
+
 
 rule deseq2:
     input:
-        counts="deseq2/all.rds",
+        dds="deseq2/all.rds",
     output:
         table="results/diffexp/{contrast}.diffexp.txt",
         ma_plot="results/diffexp/{contrast}.ma-plot.pdf",
