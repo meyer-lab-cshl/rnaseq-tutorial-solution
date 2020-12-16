@@ -1,8 +1,8 @@
 *
+scripts/.snakemake*
 !genome
 !scripts
 !scripts/*
-scripts/.snakemake*
 !scripts
 !Snakefile
 !config.yaml
@@ -10,10 +10,12 @@ scripts/.snakemake*
 !envs
 !envs/*
 !env.yaml
-!LICENSE
+!qc
 !README.md
 !reads
+!results
 !rules
 !rules/*
+!report.html
 !.gitignore
 .Rproj.user
