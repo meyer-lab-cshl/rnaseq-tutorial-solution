@@ -22,7 +22,7 @@ rule all:
     input:
         expand("results/diffexp/{contrast}.diffexp.txt",
             contrast = "AA_vs_control"),
-        "results/diffexp/pca.pdf",
+        "results/pca.pdf",
         "qc/multiqc_report.html"
 
 ##### rules #####
@@ -222,7 +222,7 @@ rule pca:
     input:
         dds="deseq2/all.rds"
     output:
-        pca_plot=report("results/diffexp/pca.pdf", "report/pca.rst"),
+        pca_plot=report("results/pca.pdf", "report/pca.rst"),
     conda:
         "envs/deseq2.yaml"
     log:
