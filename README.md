@@ -8,7 +8,8 @@ During the lectures, we built an analysis pipeline for RNAseq including alignmen
 analysis. The [homework](HOMEWORK.md) assignment asked you to extend the pipeline, evaluate your results and
 learn how to generate an analysis report. 
 
-The files you see in this directory are either part of this pipeline ([Snakemake](Snakemake),[scripts](scripts), [envs](envs)),
-contain the example data to run the analysis ([genome](genome), [reads](reads), [samples.txt](samples.txt)) or reflect the results
-of the analysis, including the Homework assignment ([results](results), [qc](qc), [report](report))
+The files you see in this directory are:
+* part of the pipeline we built: [Snakefile](Snakefile),[scripts](scripts) and [envs](envs)
+* contain the example data to run the analysis: [genome](genome), [reads](reads) and [samples.txt](samples.txt))
+* reflect the results of the analysis, including the Homework assignment: [results](results), [qc](qc), and [report](report.html)
 
