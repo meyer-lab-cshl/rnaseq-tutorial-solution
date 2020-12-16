@@ -10,6 +10,6 @@ learn how to generate an analysis report.
 
 The files you see in this directory are:
 * part of the pipeline we built: [Snakefile](Snakefile),[scripts](scripts) and [envs](envs)
-* contain the example data to run the analysis: [genome](genome), [reads](reads) and [samples.txt](samples.txt))
+* contain the example data to run the analysis: [genome](genome), [reads](reads) and [samples.txt](samples.txt)
 * reflect the results of the analysis, including the Homework assignment: [results](results), [qc](qc), and [report](report.html)
 
