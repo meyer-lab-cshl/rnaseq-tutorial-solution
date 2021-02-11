@@ -1,6 +1,5 @@
 import pandas as pd
 
-print(snakemake.params.strand)
 def get_column(strandedness):
     if pd.isnull(strandedness) or strandedness == "none":
         return 1 #non stranded protocol
@@ -13,8 +12,9 @@ def get_column(strandedness):
                           "value 'none', 'yes' or 'reverse', instead has the "
                           "value {}").format(repr(strandedness)))
 
-counts = [pd.read_table(f, index_col=0, usecols=[0, get_column(snakemake.params.strand)],
-          header=None, skiprows=4) for f in snakemake.input]
+counts = [pd.read_table(f, index_col=0, usecols=[0, get_column(strandedness)],
+          header=None, skiprows=4)
+          for f, strandedness in zip(snakemake.input, snakemake.params.strand)]
 
 for t, sample in zip(counts, snakemake.params.samples):
     t.columns = [sample]
