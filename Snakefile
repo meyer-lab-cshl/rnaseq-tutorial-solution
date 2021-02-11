@@ -1,21 +1,45 @@
+from snakemake.utils import min_version
 import pandas as pd
 
 ##### functions #####
 def get_fastq(wildcards):
+    """
+    Use sample information sheet to find read files for each sample:
+    * index sample information by sample name and unit (e.g. replicate)
+    * extract the corresponding fwd/rev read filenames from the fq1/fq2 columns
+    """
     return samples.loc[(wildcards.sample, wildcards.unit), ["fq1", "fq2"]].dropna()
 
-# parameters
-samplesfile = "samples.txt"
-STRAND = "reverse"
-DESIGN="~ condition"
-SPECIES="human"
-SAMPLESFILE="samples.txt"
+def get_strandness(samples):
+    """
+    Use sample information sheet to find the library strandedness of each sample:
+    * check if strandedness column exists, if so extract its content
+    * if strandedness is not specified, assume non-strand specific protocol
+      was used
+    """
+    if "strandedness" in samples.columns:
+        return samples["strandedness"].tolist()
+    else:
+        strand_list=["none"]
+        return strand_list*samples.shape[0]
 
-##### load sample sheets #####
-samples = pd.read_table(SAMPLESFILE).set_index(["sample", "unit"], drop=False)
+##### set minimum snakemake version #####
+# useful to specify, if pipeline relies on minimum snakemake version
+min_version("5.29.0")
+
+##### load config file #####
+# file in yaml format located in the same directory as Snakefile;
+# entries will be loaded as dictionaries
+configfile: "config.yaml"
 
 ##### setup report #####
+# captions/descriptions for output that will be included in final report generated
+# by running snakemake --report
+# results to be included in report enclosed in report(...); see eg deseq2 rule
 report: "report/workflow.rst"
+
+##### load sample sheets #####
+samples = pd.read_table(config['samples']).set_index(["sample", "unit"], drop=False)
 
 ##### target rule #####
 rule all:
@@ -24,6 +48,7 @@ rule all:
             contrast = "AA_vs_control"),
         "results/pca.pdf",
         "qc/multiqc_report.html"
+
 
 ##### rules #####
 rule generate_genome:
@@ -36,8 +61,8 @@ rule generate_genome:
     conda:
         "envs/align.yaml"
     params:
-        length=75,
-        Nbases=11
+        length=config['genome_build']['length'],
+        Nbases=config['genome_build']['Nbases']
     shell:
         """
         STAR \
@@ -58,7 +83,7 @@ rule cutadapt:
         fastq2="trimmed/{sample}-{unit}.2.fastq",
         qc="trimmed/{sample}-{unit}.qc.txt"
     params:
-        adapters="CTGACCTCAAGTCTGCACACGAGAAGGCTAG",
+        adapters=config['trim']['adapters']
     threads: 1
     conda:
         "envs/trim.yaml"
@@ -174,7 +199,7 @@ rule count_matrix:
         "counts/all.tsv"
     params:
         samples=samples['sample'].tolist(),
-        strand="reverse"
+        strand=get_strandness(samples)
     log:
         "logs/counts/count_matrix.log"
     conda:
@@ -185,12 +210,11 @@ rule count_matrix:
 rule setup_de:
     input:
         counts="counts/all.tsv",
-        samples=SAMPLESFILE
     output:
         dds="deseq2/all.rds"
     params:
-        species=SPECIES,
-        design=DESIGN
+        species=config['deseq2']['species'],
+        design=config['deseq2']['design']
     conda:
         "envs/deseq2.yaml"
     log:
@@ -208,9 +232,6 @@ rule deseq2:
             "report/ma.rst"),
         up="results/diffexp/deg-sig-up_{contrast}.csv",
         down="results/diffexp/deg-sig-down_{contrast}.csv"
-    params:
-        design=DESIGN,
-        samples=SAMPLESFILE
     conda:
         "envs/deseq2.yaml"
     log:
