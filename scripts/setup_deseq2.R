@@ -17,7 +17,7 @@ cts <- read.table(snakemake@input[["counts"]], header=TRUE, row.names="gene",
                   check.names=FALSE)
 
 message("Reading sample file")
-coldata <- read.table(snakemake@input[["samples"]], header=TRUE,
+coldata <- read.table(snakemake@config[["samples"]], header=TRUE,
                       row.names="sample", check.names=FALSE, sep="\t")
 
 message("Getting experimental design")
