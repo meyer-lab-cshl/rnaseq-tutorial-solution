@@ -1,0 +1,13 @@
+samples: "samples.txt"
+
+genome_build:
+  length: 75
+  Nbases: 11
+
+trim:
+  adapters: "CTGACCTCAAGTCTGCACACGAGAAGGCTAG"
+
+deseq2:
+  # species name for biomart annotation
+  species: "human"
+  design: "~ condition"
